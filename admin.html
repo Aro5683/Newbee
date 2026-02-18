@@ -1,51 +1,80 @@
 <!DOCTYPE html>
 <html>
+<head>
+<meta charset="UTF-8">
+<title>PDF Encrypt Tool</title>
+</head>
 <body>
-<h2>Encrypt PDF for Offline Viewer</h2>
-<input type="file" id="pdfFile">
+
+<h2>Encrypt PDF</h2>
+
+<input type="file" id="pdfFile" accept="application/pdf">
 <button onclick="encryptPDF()">Encrypt</button>
 
 <textarea id="output" style="width:100%;height:200px;margin-top:20px;"></textarea>
 
 <script>
+
 const SECRET_KEY = "MY_PRIVATE_SECRET_2025";
 
 async function encryptPDF(){
 
-  const file = document.getElementById("pdfFile").files[0];
-  if(!file){ alert("Upload PDF"); return; }
+  try{
 
-  const pdfBuffer = await file.arrayBuffer();
+    const file = document.getElementById("pdfFile").files[0];
+    if(!file){
+      alert("Upload PDF first");
+      return;
+    }
 
-  const keyMaterial = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(SECRET_KEY)
-  );
+    const pdfBuffer = await file.arrayBuffer();
 
-  const key = await crypto.subtle.importKey(
-    "raw",
-    keyMaterial,
-    {name:"AES-GCM"},
-    false,
-    ["encrypt"]
-  );
+    const keyMaterial = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(SECRET_KEY)
+    );
 
-  const iv = crypto.getRandomValues(new Uint8Array(12));
+    const key = await crypto.subtle.importKey(
+      "raw",
+      keyMaterial,
+      {name:"AES-GCM"},
+      false,
+      ["encrypt"]
+    );
 
-  const encrypted = await crypto.subtle.encrypt(
-    {name:"AES-GCM",iv},
-    key,
-    pdfBuffer
-  );
+    const iv = crypto.getRandomValues(new Uint8Array(12));
 
-  const combined = new Uint8Array(iv.length + encrypted.byteLength);
-  combined.set(iv);
-  combined.set(new Uint8Array(encrypted), iv.length);
+    const encrypted = await crypto.subtle.encrypt(
+      {name:"AES-GCM", iv},
+      key,
+      pdfBuffer
+    );
 
-  const base64 = btoa(String.fromCharCode(...combined));
+    const combined = new Uint8Array(iv.length + encrypted.byteLength);
+    combined.set(iv, 0);
+    combined.set(new Uint8Array(encrypted), iv.length);
 
-  document.getElementById("output").value = base64;
+    // SAFE BASE64 CONVERSION (no spread operator crash)
+    let binary = "";
+    const chunkSize = 0x8000;
+
+    for (let i = 0; i < combined.length; i += chunkSize) {
+      const chunk = combined.subarray(i, i + chunkSize);
+      binary += String.fromCharCode.apply(null, chunk);
+    }
+
+    const base64 = btoa(binary);
+
+    document.getElementById("output").value = base64;
+
+  }catch(e){
+    console.error(e);
+    alert("Encryption failed. Check console.");
+  }
+
 }
+
 </script>
+
 </body>
 </html>
